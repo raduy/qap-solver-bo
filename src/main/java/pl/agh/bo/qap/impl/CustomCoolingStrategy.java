@@ -6,11 +6,13 @@ package pl.agh.bo.qap.impl;
 public class CustomCoolingStrategy extends DefaultCoolingStrategy implements ICoolingStrategy {
     private final double initialTemp;
     private final double coolingRate;
+    private int nextSolutionAttempts;
 
 
-    public CustomCoolingStrategy(double initialTemp, double coolingRate) {
+    public CustomCoolingStrategy(double initialTemp, double coolingRate, int nextSolutionAttempts) {
         this.initialTemp = initialTemp;
         this.coolingRate = coolingRate;
+        this.nextSolutionAttempts = nextSolutionAttempts;
     }
 
     @Override
@@ -21,5 +23,9 @@ public class CustomCoolingStrategy extends DefaultCoolingStrategy implements ICo
     @Override
     public double coolingRate() {
         return coolingRate;
+    }
+
+    public int nextSolutionAttempts() {
+        return nextSolutionAttempts;
     }
 }

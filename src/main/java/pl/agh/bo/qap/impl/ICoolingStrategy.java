@@ -10,4 +10,6 @@ public interface ICoolingStrategy {
     double coolingRate();
 
     boolean shouldStop(int[] solution, double temperature);
+
+    int nextSolutionAttempts();
 }

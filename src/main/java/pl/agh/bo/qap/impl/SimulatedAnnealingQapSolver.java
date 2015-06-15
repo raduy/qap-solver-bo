@@ -27,24 +27,27 @@ public class SimulatedAnnealingQapSolver extends Thread implements IQapSolver {
     private static volatile int[] bestSolution;
     private static volatile double bestSolutionEnergy;
     private static volatile String bestSolutionId;
+    private int nextSolutionAttempts;
 
-    public SimulatedAnnealingQapSolver(Distances distances, Facilities facilities, ICoolingStrategy coolingStrategy) {
+    public SimulatedAnnealingQapSolver(Distances distances, Facilities facilities, ICoolingStrategy coolingStrategy, int nextSolutionAttempts) {
         this.distances = distances.asRawArray();
         this.facilities = facilities.asRawArray();
         this.coolingStrategy = coolingStrategy;
+        this.nextSolutionAttempts = nextSolutionAttempts;
     }
 
+    @Override
     public void run() {
         this.solve();
     }
 
-    public static Solution main(int _threads, Distances distances, Facilities facilities, ICoolingStrategy coolingStrategy) {
-        threads = _threads;
+    public static Solution main(Distances distances, Facilities facilities, ICoolingStrategy[] strategies) {
+        threads = strategies.length;
         long startTime = System.currentTimeMillis();
         List<Thread> threadList = new ArrayList<Thread>();
 
         for(int i = 0; i < threads; i++) {
-            SimulatedAnnealingQapSolver solver = new SimulatedAnnealingQapSolver(distances, facilities, coolingStrategy);
+            SimulatedAnnealingQapSolver solver = new SimulatedAnnealingQapSolver(distances, facilities, strategies[i], strategies[i].nextSolutionAttempts());
             threadList.add(solver);
 
             solver.setName("Thread #" + i);
@@ -82,36 +85,27 @@ public class SimulatedAnnealingQapSolver extends Thread implements IQapSolver {
             }
         }
 
-        int iteration = 0;
-
         while (!coolingStrategy.shouldStop(solution, temperature)) {
-            int[] nextSolution = findNextSolution(solution);
+            for (int i = 0; i < nextSolutionAttempts; ++i) {
+                int[] nextSolution = findNextSolution(solution);
 
-            if (shouldAcceptSolution(nextSolution, solution, temperature)) {
-                solution = nextSolution;
+                updateBestSolutionIfNecessary(nextSolution);
+
+                if (shouldAcceptSolution(nextSolution, solution, temperature)) {
+                    solution = nextSolution;
+                }
             }
 
             temperature = temperature * (1 - coolingRate);
-            iteration++;
-
-            if(iteration % 100000 == 0) {
-                updateBestSolutionIfNecessary(solution);
-                solution = bestSolution;
-            }
         }
 
-        updateBestSolutionIfNecessary(solution);
-        solution = bestSolution;
-
-        double finalEnergy = computeEnergy(solution);
-        System.out.println(this.getName() + ": " + new Solution(solution, initialEnergy, finalEnergy));
+        System.out.println(this.getName() + ": " + new Solution(bestSolution, initialEnergy, bestSolutionEnergy));
     }
 
     private void updateBestSolutionIfNecessary(int[] solution) {
         synchronized (OBJ_LOCK) {
             double energy = computeEnergy(solution);
             if (energy < bestSolutionEnergy) {
-                System.out.println("[setSolution] from: " + bestSolutionId + " to: " + this.getName());
                 bestSolution = solution;
                 bestSolutionId = this.getName();
                 bestSolutionEnergy = energy;
@@ -163,15 +157,10 @@ public class SimulatedAnnealingQapSolver extends Thread implements IQapSolver {
     private int computeEnergy(int[] solution) {
         int facilitiesLength = facilities.length;
 
-        int[] invertedSolution = invertSolution(solution);
-
         int energy = 0;
         for (int i = 0; i < facilitiesLength; i++) {
-            for (int j = i; j < facilitiesLength; j++) {
-                int locationOne = invertedSolution[i];
-                int locationTwo = invertedSolution[j];
-
-                energy += distances[locationOne][locationTwo] * facilities[i][j];
+            for (int j = 0; j < facilitiesLength; j++) {
+                energy += facilities[i][j] * distances[solution[i]][solution[j]];
             }
         }
 
@@ -186,14 +175,7 @@ public class SimulatedAnnealingQapSolver extends Thread implements IQapSolver {
         return array;
     }
 
-    private static int[] invertSolution(int[] solution) {
-        int length = solution.length;
-        int[] invertedSolution = new int[length];
-
-        for (int i = 0; i < length; i++) {
-            invertedSolution[solution[i]] = i;
-        }
-
-        return invertedSolution;
+    public Solution solve(Distances distances, Facilities facilities, ICoolingStrategy coolingStrategy) {
+        return null;
     }
 }
