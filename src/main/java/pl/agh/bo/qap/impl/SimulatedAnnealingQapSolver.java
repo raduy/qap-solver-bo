@@ -5,54 +5,118 @@ import pl.agh.bo.qap.api.Facilities;
 import pl.agh.bo.qap.api.IQapSolver;
 import pl.agh.bo.qap.api.Solution;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Random;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static java.lang.System.*;
 
 /**
  * @author Lukasz Raduj <raduj.lukasz@gmail.com>
  */
-public class SimulatedAnnealingQapSolver implements IQapSolver {
+public class SimulatedAnnealingQapSolver extends Thread implements IQapSolver {
 
     private int[][] distances;
     private int[][] facilities;
+    private ICoolingStrategy coolingStrategy;
     private final Random random = new Random(currentTimeMillis());
 
-    @Override
-    public Solution solve(Distances distances, Facilities facilities, ICoolingStrategy coolingStrategy) {
-        return solve(distances.asRawArray(), facilities.asRawArray(), coolingStrategy);
+    private static final Object OBJ_LOCK = new Object();
+    private static int threads;
+    private static volatile int[] bestSolution;
+    private static volatile double bestSolutionEnergy;
+    private static volatile String bestSolutionId;
+
+    public SimulatedAnnealingQapSolver(Distances distances, Facilities facilities, ICoolingStrategy coolingStrategy) {
+        this.distances = distances.asRawArray();
+        this.facilities = facilities.asRawArray();
+        this.coolingStrategy = coolingStrategy;
     }
 
-    private Solution solve(int[][] distances, int[][] facilities, ICoolingStrategy coolingStrategy) {
-        String errorMessage = "Distances must have equal size to facilities";
-        checkArgument(distances.length == facilities.length, errorMessage);
+    public void run() {
+        this.solve();
+    }
 
-        this.distances = distances;
-        this.facilities = facilities;
+    public static Solution main(int _threads, Distances distances, Facilities facilities, ICoolingStrategy coolingStrategy) {
+        threads = _threads;
+        long startTime = System.currentTimeMillis();
+        List<Thread> threadList = new ArrayList<Thread>();
+
+        for(int i = 0; i < threads; i++) {
+            SimulatedAnnealingQapSolver solver = new SimulatedAnnealingQapSolver(distances, facilities, coolingStrategy);
+            threadList.add(solver);
+
+            solver.setName("Thread #" + i);
+            solver.start();
+        }
+
+        for(Thread t : threadList) {
+            try {
+                t.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        long estimatedTime = System.currentTimeMillis() - startTime;
+        Solution result = new Solution(bestSolution, 0, bestSolutionEnergy);
+
+        System.out.println("");
+        System.out.println(estimatedTime + " ms");
+        return result;
+    }
+
+    private void solve() {
         double temperature = coolingStrategy.initialTemp();
         double coolingRate = coolingStrategy.coolingRate();
 
         int[] solution = drawInitialSolution(distances.length);
         double initialEnergy = computeEnergy(solution);
 
-        int[] bestFound = solution;
+        synchronized (OBJ_LOCK) {
+            if(bestSolution == null) {
+                bestSolution = solution;
+                bestSolutionId = this.getName();
+                bestSolutionEnergy = initialEnergy;
+            }
+        }
+
+        int iteration = 0;
+
         while (!coolingStrategy.shouldStop(solution, temperature)) {
             int[] nextSolution = findNextSolution(solution);
 
-            if (computeEnergy(solution) < computeEnergy(bestFound)) {
-                bestFound = solution;
-            }
             if (shouldAcceptSolution(nextSolution, solution, temperature)) {
                 solution = nextSolution;
             }
+
             temperature = temperature * (1 - coolingRate);
+            iteration++;
+
+            if(iteration % 100000 == 0) {
+                updateBestSolutionIfNecessary(solution);
+                solution = bestSolution;
+            }
         }
 
-        double finalEnergy = computeEnergy(solution);
+        updateBestSolutionIfNecessary(solution);
+        solution = bestSolution;
 
-        return new Solution(solution, initialEnergy, finalEnergy);
+        double finalEnergy = computeEnergy(solution);
+        System.out.println(this.getName() + ": " + new Solution(solution, initialEnergy, finalEnergy));
+    }
+
+    private void updateBestSolutionIfNecessary(int[] solution) {
+        synchronized (OBJ_LOCK) {
+            double energy = computeEnergy(solution);
+            if (energy < bestSolutionEnergy) {
+                System.out.println("[setSolution] from: " + bestSolutionId + " to: " + this.getName());
+                bestSolution = solution;
+                bestSolutionId = this.getName();
+                bestSolutionEnergy = energy;
+            }
+        }
     }
 
     private boolean shouldAcceptSolution(int[] nextSolution, int[] solution, double temperature) {

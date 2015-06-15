@@ -19,7 +19,6 @@ public class SimpleCmdClient {
     }
 
     private static void playWithSmallSizeProblem() {
-        IQapSolver qapSolver = new SimulatedAnnealingQapSolver();
 
         Distances distances = new Distances(new int[][]{
                 {0, 22, 53, 53},
@@ -34,16 +33,15 @@ public class SimpleCmdClient {
                 {2, 1, 4, 0}});
 
 
-        DefaultCoolingStrategy coolingStrategy = new DefaultCoolingStrategy();
+        CustomCoolingStrategy coolingStrategy = new CustomCoolingStrategy(Double.MAX_VALUE, 0.001);
 
-        Solution solution = qapSolver.solve(distances, facilities, coolingStrategy);
+        Solution solution = SimulatedAnnealingQapSolver.main(4, distances, facilities, coolingStrategy);
 
         //Optimum here is 395
         System.out.println(solution);
     }
 
     private static void playWithBiggerSizeProblem() {
-        IQapSolver qapSolver = new SimulatedAnnealingQapSolver();
 
         Distances distances = new Distances(new int[][]{
                 {0, 1, 2, 3, 1, 2, 3, 4},
@@ -69,7 +67,7 @@ public class SimpleCmdClient {
 
         CustomCoolingStrategy coolingStrategy = new CustomCoolingStrategy(Double.MAX_VALUE, 0.001);
 
-        Solution solution = qapSolver.solve(distances, facilities, coolingStrategy);
+        Solution solution = SimulatedAnnealingQapSolver.main(4, distances, facilities, coolingStrategy);
 
         //Optimum here is 107
         System.out.println(solution);
